@@ -2,11 +2,25 @@ import { useFileSystem } from "@/context/FileContext"
 import useResponsive from "@/hooks/useResponsive"
 import cn from "classnames"
 import Editor from "./Editor"
+import { useState, useEffect } from "react";
 import FileTab from "./FileTab"
+import Terminal from "@/components/terminal/Terminal.tsx";
 
 function EditorComponent() {
     const { openFiles } = useFileSystem()
     const { minHeightReached } = useResponsive()
+    const [socket, setSocket] = useState<WebSocket | null>(null);
+    
+    useEffect(() => {
+        const ws = new WebSocket("ws://139.59.74.236:80/terminal");
+        ws.onopen = () => {
+          console.log("connected");
+        };
+        setSocket(ws);
+        return () => {
+          ws.close();
+        };
+      }, []);
 
     if (openFiles.length <= 0) {
         return (
@@ -27,6 +41,7 @@ function EditorComponent() {
         >
             <FileTab />
             <Editor />
+            <Terminal width="full" socket={socket} setFiles={setFiles} />
         </main>
     )
 }
