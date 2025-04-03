@@ -1,9 +1,12 @@
 enum VIEWS {
     FILES = "FILES",
+    FILES_EXPLORER = "FILES_EXPLORER",
     CHATS = "CHATS",
     CLIENTS = "CLIENTS",
     RUN = "RUN",
     SETTINGS = "SETTINGS",
+    CALLS = "CALLS",
+    TERMINAL = "TERMINAL",
 }
 
 interface ViewContext {

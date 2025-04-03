@@ -2,25 +2,19 @@ import { useFileSystem } from "@/context/FileContext"
 import useResponsive from "@/hooks/useResponsive"
 import cn from "classnames"
 import Editor from "./Editor"
-import { useState, useEffect } from "react";
 import FileTab from "./FileTab"
-import Terminal from "@/components/terminal/Terminal.tsx";
+import TerminalPanel from "./TerminalPanel"
+import { useState } from "react"
+import { VscTerminalCmd } from "react-icons/vsc"
 
 function EditorComponent() {
     const { openFiles } = useFileSystem()
     const { minHeightReached } = useResponsive()
-    const [socket, setSocket] = useState<WebSocket | null>(null);
-    
-    useEffect(() => {
-        const ws = new WebSocket("ws://139.59.74.236:80/terminal");
-        ws.onopen = () => {
-          console.log("connected");
-        };
-        setSocket(ws);
-        return () => {
-          ws.close();
-        };
-      }, []);
+    const [isTerminalVisible, setIsTerminalVisible] = useState(false)
+
+    const toggleTerminal = () => {
+        setIsTerminalVisible(!isTerminalVisible)
+    }
 
     if (openFiles.length <= 0) {
         return (
@@ -34,14 +28,28 @@ function EditorComponent() {
 
     return (
         <main
-            className={cn("flex w-full flex-col overflow-x-auto md:h-screen", {
+            className={cn("flex w-full flex-col overflow-x-auto md:h-screen relative", {
                 "h-[calc(100vh-50px)]": !minHeightReached,
                 "h-full": minHeightReached,
             })}
         >
             <FileTab />
             <Editor />
-            <Terminal width="full" socket={socket} setFiles={setFiles} />
+
+            {/* Terminal toggle button */}
+            <button
+                className="absolute bottom-4 right-4 p-2 bg-primary text-black rounded-full shadow-lg hover:bg-primary-dark z-20"
+                onClick={toggleTerminal}
+                title={isTerminalVisible ? "Hide Terminal" : "Show Terminal"}
+            >
+                <VscTerminalCmd size={20} />
+            </button>
+
+            {/* Terminal panel */}
+            <TerminalPanel
+                isVisible={isTerminalVisible}
+                onClose={() => setIsTerminalVisible(false)}
+            />
         </main>
     )
 }

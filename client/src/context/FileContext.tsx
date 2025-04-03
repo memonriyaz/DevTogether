@@ -27,6 +27,10 @@ import { toast } from "react-hot-toast"
 import { v4 as uuidv4 } from "uuid"
 import { useAppContext } from "./AppContext"
 import { useSocket } from "./SocketContext"
+import axios from "axios"
+
+// Backend URL for file operations
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
 
 const FileContext = createContext<FileContextType | null>(null)
 
@@ -40,7 +44,8 @@ export const useFileSystem = (): FileContextType => {
 
 function FileContextProvider({ children }: { children: ReactNode }) {
     const { socket } = useSocket()
-    const { setUsers, drawingData } = useAppContext()
+    const { setUsers, drawingData, currentUser } = useAppContext()
+    const [savedFilesLoaded, setSavedFilesLoaded] = useState(false)
 
     const [fileStructure, setFileStructure] =
         useState<FileSystemItem>(initialFileStructure)
@@ -52,6 +57,90 @@ function FileContextProvider({ children }: { children: ReactNode }) {
     const [activeFile, setActiveFile] = useState<FileSystemItem | null>(
         openFiles[0],
     )
+
+    // Function to load files from the server
+    const loadSavedFiles = useCallback(async () => {
+        if (!currentUser?.roomId || savedFilesLoaded) return;
+
+        try {
+            // Get the list of files from the server
+            const response = await axios.get(`${BACKEND_URL}api/files/list/${currentUser.roomId}`);
+
+            if (response.data.success && response.data.files.length > 0) {
+                // Process the files and update the file structure
+                const serverFiles = response.data.files;
+
+                // Create a new file structure with the server files
+                const newFileStructure = { ...fileStructure };
+
+                // Add each file to the file structure
+                for (const file of serverFiles) {
+                    if (file.isDirectory) {
+                        // Add directory
+                        const dirId = uuidv4();
+                        const newDir: FileSystemItem = {
+                            id: dirId,
+                            name: file.name,
+                            type: "directory",
+                            children: [],
+                            isOpen: false,
+                        };
+
+                        // Add to root directory
+                        if (newFileStructure.children) {
+                            newFileStructure.children.push(newDir);
+                        }
+                    } else {
+                        // Add file
+                        const fileId = uuidv4();
+                        const newFile: FileSystemItem = {
+                            id: fileId,
+                            name: file.name,
+                            type: "file",
+                        };
+
+                        // Add to root directory
+                        if (newFileStructure.children) {
+                            newFileStructure.children.push(newFile);
+                        }
+
+                        // Load file content
+                        try {
+                            const contentResponse = await axios.get(`${BACKEND_URL}api/files/read/${currentUser.roomId}`, {
+                                params: { path: file.path }
+                            });
+
+                            if (contentResponse.data.success) {
+                                // Update file content directly
+                                newFile.content = contentResponse.data.content;
+
+                                // Add to open files if it's the first file
+                                if (openFiles.length === 0) {
+                                    // We already have the file in the file structure
+                                    // so we don't need to add it to openFiles here
+                                }
+                            }
+                        } catch (error) {
+                            console.error(`Error loading file content: ${error}`);
+                        }
+                    }
+                }
+
+                // Update file structure
+                setFileStructure(newFileStructure);
+                setSavedFilesLoaded(true);
+                toast.success('Loaded files from server');
+            }
+        } catch (error) {
+            console.error(`Error loading saved files: ${error}`);
+            toast.error('Failed to load files from server');
+        }
+    }, [currentUser?.roomId, savedFilesLoaded, fileStructure, openFiles]);
+
+    // Load saved files when component mounts
+    useEffect(() => {
+        loadSavedFiles();
+    }, [loadSavedFiles]);
 
     // Function to toggle the isOpen property of a directory (Directory Open/Close)
     const toggleDirectory = (dirId: Id) => {
@@ -465,6 +554,40 @@ function FileContextProvider({ children }: { children: ReactNode }) {
                         }
                     }),
                 )
+            }
+
+                    // Save file to server if currentUser.roomId is available
+            if (currentUser?.roomId) {
+                // Find the file in the file structure
+                const findFile = (directory: FileSystemItem): FileSystemItem | null => {
+                    if (directory.type === "file" && directory.id === fileId) {
+                        return directory;
+                    } else if (directory.children) {
+                        for (const child of directory.children) {
+                            const found = findFile(child);
+                            if (found) return found;
+                        }
+                    }
+                    return null;
+                };
+
+                const file = findFile(fileStructure);
+                if (file && file.type === "file") {
+                    // Save file to server
+                    try {
+                        axios.post(`${BACKEND_URL}api/files/write/${currentUser.roomId}`, {
+                            path: file.name,
+                            content: newContent
+                        }).then(() => {
+                            toast.success(`File ${file.name} saved to server`);
+                        }).catch(error => {
+                            console.error(`Error saving file to server: ${error}`);
+                            toast.error(`Failed to save file to server: ${error instanceof Error ? error.message : String(error)}`);
+                        });
+                    } catch (error) {
+                        console.error(`Error saving file to server: ${error}`);
+                    }
+                }
             }
         },
         [openFiles],

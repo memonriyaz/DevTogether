@@ -21,10 +21,35 @@ const ViewButton = ({ viewName, icon }: ViewButtonProps) => {
         }
     }
 
+    // Get the label for the view
+    const getViewLabel = () => {
+        switch (viewName) {
+            case VIEWS.FILES:
+                return 'Files';
+            case VIEWS.FILES_EXPLORER:
+                return 'Files Explorer';
+            case VIEWS.CHATS:
+                return 'Chats';
+            case VIEWS.CLIENTS:
+                return 'Users';
+            case VIEWS.RUN:
+                return 'Run';
+            case VIEWS.SETTINGS:
+                return 'Settings';
+            case VIEWS.CALLS:
+                return 'Calls';
+            case VIEWS.TERMINAL:
+                return 'Terminal';
+            default:
+                return viewName;
+        }
+    };
+
     return (
         <button
             onClick={() => handleViewClick(viewName)}
             className="relative flex items-center justify-center"
+            title={getViewLabel()}
         >
             {icon}
             {/* Show dot for new message in chat View Button */}

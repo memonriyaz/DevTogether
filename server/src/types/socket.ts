@@ -26,6 +26,29 @@ enum SocketEvent {
 	REQUEST_DRAWING = "request-drawing",
 	SYNC_DRAWING = "sync-drawing",
 	DRAWING_UPDATE = "drawing-update",
+
+	// Media events
+	MEDIA_SIGNAL = "media-signal",
+	MEDIA_REQUEST = "media-request",
+	MEDIA_READY = "media-ready",
+	MEDIA_ERROR = "media-error",
+	MEDIA_STATUS_CHANGE = "media-status-change",
+	MEDIA_CONNECTION_FAILED = "media-connection-failed",
+
+	// Channel events
+	CHANNEL_CREATE = "channel-create",
+	CHANNEL_JOIN = "channel-join",
+
+	// Terminal events
+	TERMINAL_COMMAND = "terminal:command",
+	TERMINAL_OUTPUT = "terminal:output",
+	TERMINAL_CONNECTED = "terminal:connected",
+	TERMINAL_RESIZE = "terminal:resize",
+	TERMINAL_ERROR = "terminal:error",
+	TERMINAL_INPUT = "terminal:input",
+	CHANNEL_LEAVE = "channel-leave",
+	CHANNEL_LIST = "channel-list",
+	CHANNEL_UPDATE = "channel-update",
 }
 
 interface SocketContext {

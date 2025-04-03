@@ -27,7 +27,10 @@ export const useSocket = (): SocketContextType => {
     return context
 }
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL
+// For development on local network, use your actual IP address
+// For example: const BACKEND_URL = 'http://192.168.1.100:3000'
+// For local development: const BACKEND_URL = 'http://localhost:3000'
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000'
 
 const SocketProvider = ({ children }: { children: ReactNode }) => {
     const {

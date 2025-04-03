@@ -11,6 +11,9 @@ interface User {
 	typing: boolean
 	currentFile: string | null
 	socketId: string
+	isMicOn?: boolean
+	isCameraOn?: boolean
+	activeChannelId?: string | null
 }
 
 export { USER_CONNECTION_STATUS, User }

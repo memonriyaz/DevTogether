@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Terminal } from "xterm";
 import { FitAddon } from "xterm-addon-fit";
 
@@ -7,31 +7,45 @@ function prompt(term:any) {
 }
 
 function runCommand(socket:any, command:any) {
-  socket.send(command);
+  if (socket) {
+    socket.send(command);
+  } else {
+    console.warn("Cannot send command: socket is not available");
+  }
 }
-const XTermComponent = ({ socket, setFiles }:any) => {
+const XTermComponent = ({ socket, onFilesUpdate }:any) => {
   // Pass URL as a prop
-  const terminalRef = useRef(null);
+  const terminalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const term = new Terminal({ cursorBlink: true }); // Optional customization
     const fitAddon = new FitAddon();
 
-    term.prompt = () => {
+    // Add custom prompt method
+    (term as any).prompt = () => {
       term.write("\r\n$ ");
     };
-    prompt(term);
+    prompt(term as any);
 
-    socket.onmessage = (event:any) => {
-      // console.log("the socket event ", event);
-      const parsedData = JSON.parse(event.data);
-      console.log("parsed data ", parsedData);
-      if (parsedData.isTerminal) {
-        term.write(parsedData.data);
-      } else if (parsedData.isExplorer) {
-        setFiles(parsedData.data);
-      }
-    };
+    // Check if socket exists before setting onmessage
+    if (socket) {
+      socket.onmessage = (event:any) => {
+        // console.log("the socket event ", event);
+        try {
+          const parsedData = JSON.parse(event.data);
+          console.log("parsed data ", parsedData);
+          if (parsedData.isTerminal) {
+            term.write(parsedData.data);
+          } else if (parsedData.isExplorer && onFilesUpdate) {
+            onFilesUpdate(parsedData.data);
+          }
+        } catch (error) {
+          console.error("Error parsing socket data:", error);
+        }
+      };
+    } else {
+      console.warn("Socket is not available for terminal");
+    }
 
     term.loadAddon(fitAddon);
     // term.loadAddon(attachAddon);
@@ -41,18 +55,32 @@ const XTermComponent = ({ socket, setFiles }:any) => {
     //   console.log("Terminal output:", data);
     // });
 
-    term.open(terminalRef.current);
-    fitAddon.fit();
+    if (terminalRef.current) {
+      term.open(terminalRef.current);
+      fitAddon.fit();
+    }
 
-    term.onKey((key:any) => {
-      runCommand(socket, key.key);
-    });
+    // Only set up key handler if socket exists
+    if (socket) {
+      term.onKey((key:any) => {
+        runCommand(socket, key.key);
+      });
+    }
 
     // Cleanup on unmount
     return () => {
-      term.destroy();
+      (term as any).dispose();
     };
-  }, []); // Add URL to dependency array
+  }, [socket, onFilesUpdate]); // Add dependencies
+
+  // If socket is not available, show a message
+  if (!socket) {
+    return (
+      <div style={{ width: "100%", height: "100%", backgroundColor: "#191919", display: "flex", alignItems: "center", justifyContent: "center", color: "#ccc" }}>
+        <p>Connecting to terminal...</p>
+      </div>
+    );
+  }
 
   return (
     <div

@@ -14,6 +14,9 @@ interface RemoteUser extends User {
     typing: boolean
     currentFile: string
     socketId: string
+    isMicOn?: boolean
+    isCameraOn?: boolean
+    activeChannelId?: string
 }
 
 enum USER_STATUS {

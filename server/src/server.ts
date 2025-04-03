@@ -4,10 +4,15 @@ import http from "http"
 import cors from "cors"
 import { SocketEvent, SocketId } from "./types/socket"
 import { USER_CONNECTION_STATUS, User } from "./types/user"
+import { Channel, ChannelType } from "./types/media"
 import { Server } from "socket.io"
 import path from "path"
 import fs from "fs" // Import the filesystem module
-
+// import setupTerminalHandler from "./handlers/terminalHandler"
+// import setupPtyTerminalHandler from "./handlers/ptyTerminalHandler"
+// import setupStreamTerminalHandler from "./handlers/streamTerminalHandler"
+import setupStreamTerminalHandler from "./handlers/streamTerminalHandler";
+import fileRoutes from "./routes/fileRoutes";
 dotenv.config()
 
 const app = express()
@@ -17,6 +22,9 @@ app.use(express.json())
 app.use(cors())
 
 app.use(express.static(path.join(__dirname, "public"))) // Serve static files
+
+// Use file routes
+app.use('/api/files', fileRoutes)
 
 // ================================================================
 // Updated API endpoint for saving files on the server using the file's original name
@@ -62,12 +70,41 @@ const server = http.createServer(app)
 const io = new Server(server, {
   cors: {
     origin: "*",
+    methods: ["GET", "POST"],
+    credentials: true
   },
   maxHttpBufferSize: 1e8,
   pingTimeout: 60000,
+  // Allow transport methods that work well with terminal
+  transports: ['websocket', 'polling']
 })
 
+// Set up terminal handlers
+console.log('Setting up terminal handlers')
+// Use the stream terminal handler for a more integrated experience
+setupStreamTerminalHandler(io)
+
 let userSocketMap: User[] = []
+
+// Initialize default channels
+let channels: Channel[] = [
+  {
+    id: "general-channel",
+    name: "General Channel",
+    type: ChannelType.COMBINED,
+    participants: [],
+    createdAt: Date.now(),
+    description: "General communication channel"
+  },
+  {
+    id: "team-channel",
+    name: "Team Channel",
+    type: ChannelType.COMBINED,
+    participants: [],
+    createdAt: Date.now(),
+    description: "Team communication channel"
+  },
+]
 
 // Function to get all users in a room
 function getUsersInRoom(roomId: string): User[] {
@@ -95,6 +132,13 @@ function getUserBySocketId(socketId: SocketId): User | null {
 }
 
 io.on("connection", (socket) => {
+  console.log(`New socket connection: ${socket.id}`);
+
+  // Handle socket errors
+  socket.on('error', (error) => {
+    console.error(`Socket error for ${socket.id}:`, error);
+  });
+
   // Handle user actions
   socket.on(SocketEvent.JOIN_REQUEST, ({ roomId, username }) => {
     // Check if username exists in the room
@@ -283,11 +327,141 @@ io.on("connection", (socket) => {
     if (!roomId) return
     socket.broadcast.to(roomId).emit(SocketEvent.DRAWING_UPDATE, { snapshot })
   })
+
+  // Media event handlers
+  socket.on(SocketEvent.MEDIA_SIGNAL, ({ signal, to, username, type }) => {
+    console.log(`Received ${type} signal from ${username} to ${to}`);
+
+    // Validate the target socket exists
+    const targetSocket = io.sockets.sockets.get(to);
+    if (!targetSocket) {
+      console.error(`Target socket ${to} not found for ${username}'s ${type} signal`);
+      // Notify sender that the target is not available
+      socket.emit(SocketEvent.MEDIA_ERROR, {
+        error: 'Target user not available',
+        target: to,
+        type: type
+      });
+      return;
+    }
+
+    // Forward the signal to the target
+    io.to(to).emit(SocketEvent.MEDIA_SIGNAL, { signal, from: socket.id, username, type });
+
+    // Log successful forwarding
+    console.log(`Successfully forwarded ${type} signal from ${username} to ${to}`);
+  })
+
+  socket.on(SocketEvent.MEDIA_STATUS_CHANGE, ({ isMicOn, isCameraOn, activeChannelId }) => {
+    const user = getUserBySocketId(socket.id)
+    if (!user) return
+    const roomId = user.roomId
+
+    console.log(`User ${user.username} changed media status: mic=${isMicOn}, camera=${isCameraOn}, channel=${activeChannelId}`);
+
+    // Update user's media status
+    userSocketMap = userSocketMap.map(u => {
+      if (u.socketId === socket.id) {
+        return { ...u, isMicOn, isCameraOn, activeChannelId }
+      }
+      return u
+    })
+
+    // Broadcast the status change to all users in the room
+    socket.broadcast.to(roomId).emit(SocketEvent.MEDIA_STATUS_CHANGE, {
+      username: user.username,
+      isMicOn,
+      isCameraOn,
+      activeChannelId,
+    })
+  })
+
+  // Channel event handlers
+  socket.on(SocketEvent.CHANNEL_CREATE, ({ channel }) => {
+    const user = getUserBySocketId(socket.id)
+    if (!user) return
+    const roomId = user.roomId
+
+    console.log(`User ${user.username} created channel: ${channel.name}`);
+
+    // Add the new channel
+    channels.push(channel)
+
+    // Broadcast the new channel to all users in the room
+    io.to(roomId).emit(SocketEvent.CHANNEL_CREATE, { channel })
+  })
+
+  socket.on(SocketEvent.CHANNEL_JOIN, ({ channelId }) => {
+    const user = getUserBySocketId(socket.id)
+    if (!user) return
+    const roomId = user.roomId
+
+    // Find the channel
+    const channelIndex = channels.findIndex(c => c.id === channelId)
+    if (channelIndex === -1) {
+      console.error(`Channel ${channelId} not found`);
+      return;
+    }
+
+    console.log(`User ${user.username} joined channel: ${channels[channelIndex].name}`);
+
+    // Add the user to the channel participants if not already there
+    if (!channels[channelIndex].participants.includes(user.username)) {
+      channels[channelIndex].participants.push(user.username)
+    }
+
+    // Broadcast to all users in the room that this user joined the channel
+    io.to(roomId).emit(SocketEvent.CHANNEL_JOIN, {
+      channelId,
+      username: user.username,
+    })
+
+    // Send the updated channel list to all users in the room
+    io.to(roomId).emit(SocketEvent.CHANNEL_LIST, { channels })
+  })
+
+  socket.on(SocketEvent.CHANNEL_LEAVE, ({ channelId }) => {
+    const user = getUserBySocketId(socket.id)
+    if (!user) return
+    const roomId = user.roomId
+
+    // Find the channel
+    const channelIndex = channels.findIndex(c => c.id === channelId)
+    if (channelIndex === -1) {
+      console.error(`Channel ${channelId} not found`);
+      return;
+    }
+
+    console.log(`User ${user.username} left channel: ${channels[channelIndex].name}`);
+
+    // Remove the user from the channel participants
+    channels[channelIndex].participants = channels[channelIndex].participants.filter(
+      username => username !== user.username
+    )
+
+    // Broadcast to all users in the room that this user left the channel
+    io.to(roomId).emit(SocketEvent.CHANNEL_LEAVE, {
+      channelId,
+      username: user.username,
+    })
+
+    // Send the updated channel list to all users in the room
+    io.to(roomId).emit(SocketEvent.CHANNEL_LIST, { channels })
+  })
+
+  // Send the channel list when a user joins a room
+  socket.on(SocketEvent.JOIN_ACCEPTED, () => {
+    const roomId = getRoomId(socket.id)
+    if (!roomId) return
+
+    // Send the channel list to the user
+    socket.emit(SocketEvent.CHANNEL_LIST, { channels })
+  })
 })
 
 const PORT = process.env.PORT || 3000
 
-app.get("/", (req: Request, res: Response) => {
+app.get("/", (_req: Request, res: Response) => {
   // Send the index.html file
   res.sendFile(path.join(__dirname, "..", "public", "index.html"))
 })

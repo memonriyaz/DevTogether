@@ -1,10 +1,23 @@
 import { defineConfig } from "vite"
 import react from "@vitejs/plugin-react"
 import { fileURLToPath, URL } from "url"
+import { nodePolyfills } from "vite-plugin-node-polyfills"
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    plugins: [react()],
+    plugins: [
+        react(),
+        nodePolyfills({
+            globals: {
+                global: true,
+                Buffer: true,
+                process: true,
+            },
+        }),
+    ],
+    define: {
+        global: 'globalThis',
+    },
     build: {
         chunkSizeWarningLimit: 1600,
         rollupOptions: {
