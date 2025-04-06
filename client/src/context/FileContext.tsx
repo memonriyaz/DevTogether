@@ -381,27 +381,62 @@ function FileContextProvider({ children }: { children: ReactNode }) {
         [socket],
     )
 
-    const openFile = (fileId: Id) => {
+    const openFile = async (fileId: Id) => {
         const file = getFileById(fileStructure, fileId)
 
         if (file) {
-            updateFileContent(activeFile?.id || "", activeFile?.content || "") // Save the content of the previously active file
+            // Save the content of the previously active file
+            if (activeFile) {
+                updateFileContent(activeFile.id || "", activeFile.content || "")
+            }
+
+            // Check if the file has content, if not and it's from server, try to load it
+            if (file.type === "file" && (!file.content || file.content === "")) {
+                console.log(`File ${file.name} has no content, attempting to load from server`);
+
+                // Try to load content from server if we have a room ID
+                if (currentUser?.roomId) {
+                    try {
+                        const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+                        const contentResponse = await axios.get(`${BACKEND_URL}/api/files/read/${currentUser.roomId}`, {
+                            params: { path: file.name }
+                        });
+
+                        if (contentResponse.data.success) {
+                            console.log(`Loaded content for ${file.name} from server`);
+                            // Update the file content
+                            file.content = contentResponse.data.content;
+
+                            // Also update in the file structure
+                            updateFileContent(file.id, contentResponse.data.content);
+                        }
+                    } catch (error) {
+                        console.error(`Error loading file content from server: ${error}`);
+                        toast.error(`Failed to load file content: ${error instanceof Error ? error.message : String(error)}`);
+                    }
+                }
+            }
 
             // Add the file to openFiles if it's not already open
-            if (!openFiles.some((file) => file.id === fileId)) {
+            if (!openFiles.some((f) => f.id === fileId)) {
                 setOpenFiles((prevOpenFiles) => [...prevOpenFiles, file])
             }
 
             // Update content in openFiles
             setOpenFiles((prevOpenFiles) =>
-                prevOpenFiles.map((file) => {
-                    if (file.id === activeFile?.id) {
+                prevOpenFiles.map((f) => {
+                    if (f.id === activeFile?.id) {
                         return {
-                            ...file,
+                            ...f,
                             content: activeFile.content || "",
                         }
+                    } else if (f.id === file.id) {
+                        return {
+                            ...f,
+                            content: file.content || "",
+                        }
                     } else {
-                        return file
+                        return f
                     }
                 }),
             )

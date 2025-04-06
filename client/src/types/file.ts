@@ -9,6 +9,7 @@ interface FileSystemItem {
     children?: FileSystemItem[]
     content?: FileContent
     isOpen?: boolean
+    path?: string // Path to the file on the server
 }
 
 interface FileContext {
@@ -25,7 +26,7 @@ interface FileContext {
     deleteDirectory: (dirId: Id) => void
     createFile: (parentDirId: Id, name: FileName) => Id
     updateFileContent: (fileId: Id, content: FileContent) => void
-    openFile: (fileId: Id) => void
+    openFile: (fileId: Id) => Promise<void>
     renameFile: (fileId: Id, newName: FileName) => boolean
     deleteFile: (fileId: Id) => void
     downloadFilesAndFolders: () => void

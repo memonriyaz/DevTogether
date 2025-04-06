@@ -121,6 +121,7 @@ function FilesView() {
                             name: file.name,
                             type: 'file',
                             content: '',
+                            path: file.path, // Store the path for later use
                         };
 
                         // Add to server directory
@@ -135,6 +136,7 @@ function FilesView() {
                             });
 
                             if (contentResponse.data.success) {
+                                console.log(`Loaded content for ${file.name} from server`);
                                 newFile.content = contentResponse.data.content;
                             }
                         } catch (error) {

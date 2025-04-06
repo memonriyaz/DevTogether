@@ -10,6 +10,8 @@ import { SocketEvent } from "@/types/socket"
 import { USER_STATUS, User } from "@/types/user"
 import { useEffect } from "react"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
+import Chatbot from "@/components/chatbot/Chatbot"; // ✅ Import the chatbot component
+
 
 function EditorPage() {
     // Listen user online/offline status
@@ -48,10 +50,17 @@ function EditorPage() {
     }
 
     return (
-        <SplitterComponent>
-            <Sidebar />
-            <WorkSpace/>
-        </SplitterComponent>
+        <div style={{ position: "relative", height: "100vh" }}>
+            <SplitterComponent>
+                <Sidebar />
+                <WorkSpace />
+            </SplitterComponent>
+
+            {/* ✅ Chatbot fixed at the bottom-right corner */}
+            <div style={{ position: "absolute", bottom: "20px", right: "20px" }}>
+                <Chatbot />
+            </div>
+        </div>
     )
 }
 
